@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Globe + Timeline</title>
+
+  <link rel="stylesheet" href="./styles.css" />
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <div class="timeline">
+    <div class="row">
+      <strong>Chronologie</strong>
+      <span class="dateBox" id="selectedDate">—</span>
+      <span class="hint">Déplace le slider : on affiche les événements actifs à cette année.</span>
+    </div>
+
+    <div class="row">
+      <input id="range" type="range" min="0" max="0" step="1" value="0" />
+    </div>
+
+    <div class="row">
+      <button id="addToggle" class="btn">➕ Ajouter un événement</button>
+      <span id="addHint" class="hint"></span>
+    </div>
+
+    <div id="addPanel" class="addPanel hidden">
+      <div class="addGrid">
+        <label>
+          Titre
+          <input id="evTitle" type="text" placeholder="Ex: Débarquement en Normandie" />
+        </label>
+
+        <label>
+          Date (début)
+          <input id="evStart" type="date" />
+        </label>
+
+        <label>
+          Date (fin)
+          <input id="evEnd" type="date" />
+        </label>
+
+        <label>
+          Lien YouTube
+          <input id="evYoutube" type="url" placeholder="https://www.youtube.com/watch?v=..." />
+        </label>
+
+        <label>
+          Résumé
+          <textarea id="evSummary" rows="3" placeholder="Résumé court..."></textarea>
+        </label>
+
+        <label>
+          Coordonnées
+          <input id="evCoords" type="text" readonly placeholder="Clique sur la carte..." />
+        </label>
+      </div>
+
+      <div class="row" style="justify-content: space-between;">
+        <button id="genJson" class="btn">Générer JSON</button>
+        <button id="clearForm" class="btnSecondary">Effacer</button>
+      </div>
+
+      <textarea id="jsonOut" class="jsonOut" rows="6" readonly placeholder="Le JSON apparaîtra ici..."></textarea>
+    </div>
+
+    <div class="panel">
+      <div class="events" id="eventsList"></div>
+      <div class="hint">
+        Plus tard :
+        <ul>
+          <li>changer la carte selon la date</li>
+          <li>zoom auto sur les événements</li>
+          <li>timeline par décennie</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal vidéo -->
+  <div id="videoModal" class="modal hidden" aria-hidden="true">
+    <div class="modalBackdrop" id="modalBackdrop"></div>
+
+    <div class="modalContent" role="dialog" aria-modal="true" aria-label="Lecteur vidéo">
+      <button class="modalClose" id="modalClose" title="Fermer">✕</button>
+      <div class="modalFrameWrap">
+        <iframe
+          id="videoFrame"
+          src=""
+          title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen
+        ></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

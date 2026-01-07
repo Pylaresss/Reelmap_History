@@ -1,47 +1,129 @@
-body { margin:0; font-family: system-ui, Arial; background:#0b0f14; color:#e8eef7; }
-#map { height: calc(100vh - 260px); } /* plus de place car on a ajouté le panel ajout */
-
-.timeline {
-  height: 260px;
-  border-top: 1px solid rgba(255,255,255,.12);
-  padding: 14px 16px;
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
   background: #0b0f14;
-  display: grid;
+  color: #e8eef7;
+  font-family: system-ui, Arial, sans-serif;
+}
+
+/* Layout global */
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Carte fullscreen */
+#mapContainer {
+  position: relative;
+  flex: 1;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+}
+
+/* Barre timeline en bas de la carte */
+#timelineBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 14, 20, 0.92);
+  padding: 10px 14px;
+  border-top: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(6px);
+}
+
+.timelineHeader {
+  display: flex;
+  justify-content: space-between;
   gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 
-.row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-.dateBox { padding:6px 10px; border:1px solid rgba(255,255,255,.18); border-radius:12px; }
-input[type="range"] { width: min(900px, 100%); }
-
-.panel {
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-items:start;
+.dateBox {
+  margin-left: 8px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 12px;
+  font-weight: 600;
 }
 
-.events {
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 14px;
-  padding: 10px;
-  max-height: 120px;
-  overflow:auto;
-  background: rgba(255,255,255,.03);
+.hint {
+  opacity: .75;
+  font-size: 13px;
+}
+
+#range {
+  width: 100%;
+}
+
+/* Panneau événements repliable */
+#eventsPanel {
+  background: rgba(10, 14, 20, 0.96);
+  border-top: 1px solid rgba(255,255,255,.15);
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+
+#eventsPanel.collapsed {
+  max-height: 42px;
+}
+
+#eventsPanel.expanded {
+  max-height: 45vh;
+}
+
+#togglePanel {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #e8eef7;
+  font-size: 16px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+#togglePanel:hover {
+  background: rgba(255,255,255,.05);
+}
+
+/* Liste événements */
+#eventsList {
+  padding: 10px 12px 14px 12px;
+  max-height: calc(45vh - 42px);
+  overflow-y: auto;
 }
 
 .eventCard {
   padding: 10px;
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.02);
-  margin-bottom: 8px;
+  background: rgba(255,255,255,.03);
+  margin-bottom: 10px;
 }
 
-.eventTitle { font-weight:700; margin:0 0 4px 0; }
-.eventMeta { opacity:.75; font-size: 13px; margin-bottom:6px; }
-.hint { opacity:.7; font-size: 13px; }
+.eventTitle {
+  font-weight: 800;
+  margin-bottom: 4px;
+}
 
+.eventMeta {
+  opacity: .75;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.eventSummary {
+  opacity: .92;
+}
+
+/* Bouton regarder (style lien) */
 .eventLinkBtn {
   background: transparent;
   border: none;
@@ -51,70 +133,6 @@ input[type="range"] { width: min(900px, 100%); }
   font: inherit;
 }
 .eventLinkBtn:hover { text-decoration: underline; }
-
-/* Buttons */
-.btn {
-  background: rgba(255,255,255,.10);
-  border: 1px solid rgba(255,255,255,.18);
-  color: #e8eef7;
-  border-radius: 12px;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-.btn:hover { background: rgba(255,255,255,.14); }
-
-.btnSecondary {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,.18);
-  color: #e8eef7;
-  border-radius: 12px;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-.btnSecondary:hover { background: rgba(255,255,255,.06); }
-
-/* Add panel */
-.addPanel {
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 14px;
-  padding: 10px;
-  background: rgba(255,255,255,.03);
-}
-.addPanel.hidden { display: none; }
-
-.addGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.addGrid label {
-  display: grid;
-  gap: 6px;
-  font-size: 13px;
-  opacity: .95;
-}
-
-.addGrid input, .addGrid textarea {
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.14);
-  color: #e8eef7;
-  border-radius: 12px;
-  padding: 8px 10px;
-  outline: none;
-}
-
-.addGrid textarea { grid-column: span 2; }
-
-.jsonOut {
-  width: 100%;
-  background: rgba(0,0,0,.35);
-  border: 1px solid rgba(255,255,255,.14);
-  color: #e8eef7;
-  border-radius: 12px;
-  padding: 10px;
-}
 
 /* Modal video */
 .modal.hidden { display: none; }

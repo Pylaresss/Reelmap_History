@@ -10,75 +10,29 @@
 </head>
 
 <body>
-  <div id="map"></div>
+  <div id="app">
+    <!-- Carte -->
+    <div id="mapContainer">
+      <div id="map"></div>
 
-  <div class="timeline">
-    <div class="row">
-      <strong>Chronologie</strong>
-      <span class="dateBox" id="selectedDate">—</span>
-      <span class="hint">Déplace le slider : on affiche les événements actifs à cette année.</span>
-    </div>
+      <!-- Barre chronologie en bas de la carte -->
+      <div id="timelineBar">
+        <div class="timelineHeader">
+          <div>
+            <strong>Chronologie</strong>
+            <span class="dateBox" id="selectedDate">—</span>
+          </div>
+          <span class="hint">Déplace le slider : on affiche les événements actifs à cette année.</span>
+        </div>
 
-    <div class="row">
-      <input id="range" type="range" min="0" max="0" step="1" value="0" />
-    </div>
-
-    <div class="row">
-      <button id="addToggle" class="btn">➕ Ajouter un événement</button>
-      <span id="addHint" class="hint"></span>
-    </div>
-
-    <div id="addPanel" class="addPanel hidden">
-      <div class="addGrid">
-        <label>
-          Titre
-          <input id="evTitle" type="text" placeholder="Ex: Débarquement en Normandie" />
-        </label>
-
-        <label>
-          Date (début)
-          <input id="evStart" type="date" />
-        </label>
-
-        <label>
-          Date (fin)
-          <input id="evEnd" type="date" />
-        </label>
-
-        <label>
-          Lien YouTube
-          <input id="evYoutube" type="url" placeholder="https://www.youtube.com/watch?v=..." />
-        </label>
-
-        <label>
-          Résumé
-          <textarea id="evSummary" rows="3" placeholder="Résumé court..."></textarea>
-        </label>
-
-        <label>
-          Coordonnées
-          <input id="evCoords" type="text" readonly placeholder="Clique sur la carte..." />
-        </label>
+        <input id="range" type="range" min="0" max="0" step="1" value="0" />
       </div>
-
-      <div class="row" style="justify-content: space-between;">
-        <button id="genJson" class="btn">Générer JSON</button>
-        <button id="clearForm" class="btnSecondary">Effacer</button>
-      </div>
-
-      <textarea id="jsonOut" class="jsonOut" rows="6" readonly placeholder="Le JSON apparaîtra ici..."></textarea>
     </div>
 
-    <div class="panel">
-      <div class="events" id="eventsList"></div>
-      <div class="hint">
-        Plus tard :
-        <ul>
-          <li>changer la carte selon la date</li>
-          <li>zoom auto sur les événements</li>
-          <li>timeline par décennie</li>
-        </ul>
-      </div>
+    <!-- Panneau événements repliable -->
+    <div id="eventsPanel" class="collapsed">
+      <button id="togglePanel" aria-label="Afficher/Masquer les événements">⬆</button>
+      <div id="eventsList"></div>
     </div>
   </div>
 

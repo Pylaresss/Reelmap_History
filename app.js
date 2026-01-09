@@ -1,19 +1,55 @@
-// app.js (module) — Supabase (Postgres) + carte satellite + slider par année + panneau événements repliable + player YouTube modal
+// app.js (module) — Supabase + carte satellite + slider par année + panneau repliable + modal vidéo + recherche intelligente + suggestions
 
-// ---- UI elements (nouveau layout)
+function yearFromSupabaseDate(s) {
+  // "0331-10-01 BC" -> -331
+  // "1918-10-02"    -> 1918
+  if (!s) return null;
+
+  const isBC = s.includes("BC");
+  const y = parseInt(s.slice(0, 4), 10); // "0331" -> 331
+  return isBC ? -y : y;
+}
+
+function displayYear(y) {
+  if (y == null) return "";
+  return y < 0 ? `${Math.abs(y)} av. J.-C.` : `${y}`;
+}
+
+// Format affichage jour/mois/année (supporte BC)
+function fmtDay(iso) {
+  if (!iso) return "—";
+
+  const isBC = iso.includes("BC");
+  const raw = iso.replace(" BC", "");
+  const [yyyy, mm, dd] = raw.split("-");
+  const y = parseInt(yyyy, 10);
+
+  const base = `${dd}/${mm}/${String(y).padStart(1, "0")}`;
+  return isBC ? `${base} av. J.-C.` : `${base}/${y}`.replace(`${dd}/${mm}/${y}`, `${dd}/${mm}/${y}`);
+}
+
+// Variante plus simple/robuste : DD/MM/YYYY + suffixe BC si besoin
+function fmtDay2(iso) {
+  if (!iso) return "—";
+  const isBC = iso.includes("BC");
+  const raw = iso.replace(" BC", "");
+  const [yyyy, mm, dd] = raw.split("-");
+  const y = parseInt(yyyy, 10);
+  const base = `${dd}/${mm}/${y}`;
+  return isBC ? `${base} av. J.-C.` : base;
+}
+
+// ---- UI elements
 const range = document.getElementById("range");
 const selectedDate = document.getElementById("selectedDate");
 const eventsList = document.getElementById("eventsList");
 const eventsPanel = document.getElementById("eventsPanel");
 const togglePanel = document.getElementById("togglePanel");
 
-// ---- Format date
-const fmtDay = (iso) =>
-  new Date(iso + "T00:00:00Z").toLocaleDateString("fr-FR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+const searchInput = document.getElementById("searchInput");
+const searchBtn = document.getElementById("searchBtn");
+const clearBtn = document.getElementById("clearBtn");
+const suggestionsEl = document.getElementById("suggestions");
 
 // ---- Modal video elements
 const videoModal = document.getElementById("videoModal");
@@ -71,6 +107,22 @@ togglePanel.addEventListener("click", () => {
   togglePanel.textContent = isCollapsed ? "⬇" : "⬆";
 });
 
+// ---- Helpers
+function showError(msg) {
+  console.error(msg);
+  if (eventsList) {
+    eventsList.innerHTML = `<div class="hint">❌ ${msg}</div>`;
+  }
+}
+
+function normalizeQuery(q) {
+  return (q || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
 // ---- Supabase config
 const SUPABASE_URL = "https://dxcssekpwizrwkvtwxll.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_bnZy8XWs7607Bag5f1jeqQ_7LUQl7IL";
@@ -91,27 +143,39 @@ async function loadEventsFromSupabase() {
 
   const rows = await r.json();
 
-  // Normalisation : DB -> format front
-  return rows.map((e) => ({
-    id: e.id,
-    title: e.title,
-    start: e.start_date,
-    end: e.end_date,
-    lat: e.lat,
-    lng: e.lng,
-    summary: e.summary || "",
-    youtube: e.youtube_url || "",
-  }));
+  // DB -> format front
+  // ✅ Ajout startYear/endYear + correction si inversé
+  return rows.map((e) => {
+    const startYear = yearFromSupabaseDate(e.start_date);
+    const endYear = yearFromSupabaseDate(e.end_date);
+
+    // Si end < start, on swap pour éviter de filtrer "dans le vide"
+    let start = e.start_date;
+    let end = e.end_date;
+    let sY = startYear;
+    let eY = endYear;
+
+    if (sY != null && eY != null && eY < sY) {
+      [start, end] = [end, start];
+      [sY, eY] = [eY, sY];
+    }
+
+    return {
+      id: e.id,
+      title: e.title,
+      start,
+      end,
+      startYear: sY,
+      endYear: eY,
+      lat: e.lat,
+      lng: e.lng,
+      summary: e.summary || "",
+      youtube: e.youtube_url || "",
+    };
+  });
 }
 
-function showError(msg) {
-  console.error(msg);
-  if (eventsList) {
-    eventsList.innerHTML = `<div class="hint">❌ ${msg}</div>`;
-  }
-}
-
-// ---- Load events (avec sécurité)
+// ---- Load events
 let EVENTS = [];
 try {
   EVENTS = await loadEventsFromSupabase();
@@ -119,15 +183,17 @@ try {
   showError(`Impossible de charger les événements : ${err.message}`);
 }
 
-// ---- Build timeline by year
+// ---- Build timeline by year (✅ BC-safe)
 function buildTimelineByYear(events) {
-  if (!events || events.length === 0) return [2024]; // fallback
-  const years = events.flatMap((e) => [
-    new Date(e.start + "T00:00:00Z").getUTCFullYear(),
-    new Date(e.end + "T00:00:00Z").getUTCFullYear(),
-  ]);
+  if (!events || events.length === 0) return [2024];
+
+  const years = events
+    .flatMap((e) => [e.startYear, e.endYear])
+    .filter((y) => typeof y === "number" && !Number.isNaN(y));
+
   const minYear = Math.min(...years);
   const maxYear = Math.max(...years);
+
   const timeline = [];
   for (let y = minYear; y <= maxYear; y++) timeline.push(y);
   return timeline;
@@ -135,14 +201,168 @@ function buildTimelineByYear(events) {
 
 const timeline = buildTimelineByYear(EVENTS);
 
-// ---- Filter events active during a year
+function clampYearToTimeline(year) {
+  const minY = timeline[0];
+  const maxY = timeline[timeline.length - 1];
+  return Math.min(maxY, Math.max(minY, year));
+}
+
+function setSliderToYear(year) {
+  const y = clampYearToTimeline(year);
+  const idx = timeline.indexOf(y);
+  if (idx !== -1) {
+    range.value = String(idx);
+    updateForSlider();
+  }
+}
+
+// ---- Filters (✅ BC-safe)
 function filterEventsForYear(year) {
   return EVENTS.filter((e) => {
-    const startYear = new Date(e.start + "T00:00:00Z").getUTCFullYear();
-    const endYear = new Date(e.end + "T00:00:00Z").getUTCFullYear();
+    const startYear = e.startYear;
+    const endYear = e.endYear ?? e.startYear;
+
+    if (startYear == null) return false;
     return year >= startYear && year <= endYear;
   });
 }
+
+function filterEventsForYearRange(startYear, endYear) {
+  return EVENTS.filter((e) => {
+    const s = e.startYear;
+    const en = e.endYear ?? e.startYear;
+    if (s == null) return false;
+    return !(en < startYear || s > endYear);
+  });
+}
+
+function filterEventsByText(events, qNorm) {
+  if (!qNorm) return events;
+  return events.filter((e) => {
+    const hay = normalizeQuery(`${e.title} ${e.summary || ""}`);
+    return hay.includes(qNorm);
+  });
+}
+
+// ---- Intelligent search presets (termes -> période)
+const PERIOD_PRESETS = [
+  {
+    keys: [
+      "seconde guerre mondiale",
+      "seconde guerre mondial",
+      "2e guerre mondiale",
+      "2eme guerre mondiale",
+      "2ème guerre mondiale",
+      "deuxieme guerre mondiale",
+      "deuxième guerre mondiale",
+      "ww2",
+      "world war 2",
+      "world war ii",
+      "2gm",
+    ],
+    start: 1939,
+    end: 1945,
+  },
+  {
+    keys: [
+      "premiere guerre mondiale",
+      "première guerre mondiale",
+      "premiere guerre mondial",
+      "première guerre mondial",
+      "1ere guerre mondiale",
+      "1ère guerre mondiale",
+      "ww1",
+      "world war 1",
+      "world war i",
+      "1gm",
+    ],
+    start: 1914,
+    end: 1918,
+  },
+  {
+    keys: ["guerre froide", "cold war"],
+    start: 1947,
+    end: 1991,
+  },
+  {
+    keys: ["debarquement", "débarquement", "normandie", "d-day", "dday"],
+    start: 1944,
+    end: 1944,
+  },
+];
+
+const PERIOD_SUGGESTIONS = [
+  { label: "Seconde Guerre mondiale", start: 1939, end: 1945, keywords: PERIOD_PRESETS[0].keys },
+  { label: "Première Guerre mondiale", start: 1914, end: 1918, keywords: PERIOD_PRESETS[1].keys },
+  { label: "Guerre froide", start: 1947, end: 1991, keywords: PERIOD_PRESETS[2].keys },
+  { label: "Débarquement (Normandie)", start: 1944, end: 1944, keywords: PERIOD_PRESETS[3].keys },
+];
+
+function findPreset(qNorm) {
+  // match direct
+  for (const p of PERIOD_PRESETS) {
+    if (p.keys.some((k) => qNorm.includes(normalizeQuery(k)))) return p;
+  }
+
+  // match par mots (robuste fautes/ordre)
+  const qWords = new Set(qNorm.split(/\s+/).filter(Boolean));
+  for (const p of PERIOD_PRESETS) {
+    for (const k of p.keys) {
+      const kWords = normalizeQuery(k).split(/\s+/).filter(Boolean);
+      const hits = kWords.filter((w) => qWords.has(w)).length;
+      if (hits >= 2) return p;
+    }
+  }
+  return null;
+}
+
+// ---- Search state
+let searchMode = null;
+// null = normal (slider année)
+// {type:"range", start, end} = période
+// {type:"text", text} = texte
+
+function applySearch() {
+  const qNorm = normalizeQuery(searchInput.value);
+
+  if (!qNorm) {
+    searchMode = null;
+    updateForSlider();
+    return;
+  }
+
+  const preset = findPreset(qNorm);
+
+  if (preset) {
+    searchMode = { type: "range", start: preset.start, end: preset.end, text: qNorm };
+    setSliderToYear(preset.start);
+
+    const eventsRange = filterEventsForYearRange(preset.start, preset.end);
+    renderList(eventsRange);
+
+    const src = map.getSource("events");
+    if (src) src.setData(toGeoJSON(eventsRange));
+
+    selectedDate.textContent = `${preset.start}–${preset.end}`;
+    return;
+  }
+
+  // Sinon filtre texte sur l’année courante
+  searchMode = { type: "text", text: qNorm };
+  updateForSlider();
+}
+
+searchBtn.addEventListener("click", () => {
+  hideSuggestions();
+  applySearch();
+});
+
+clearBtn.addEventListener("click", () => {
+  searchInput.value = "";
+  hideSuggestions();
+  searchMode = null;
+  updateForSlider();
+});
 
 // ---- GeoJSON
 function toGeoJSON(events) {
@@ -168,7 +388,7 @@ function renderList(events) {
   if (!eventsList) return;
 
   if (!events || events.length === 0) {
-    eventsList.innerHTML = `<div class="hint">Aucun événement pour cette année.</div>`;
+    eventsList.innerHTML = `<div class="hint">Aucun événement pour cette recherche.</div>`;
     return;
   }
 
@@ -177,7 +397,7 @@ function renderList(events) {
       (e) => `
       <div class="eventCard">
         <div class="eventTitle">${e.title}</div>
-        <div class="eventMeta">${fmtDay(e.start)} → ${fmtDay(e.end)}</div>
+        <div class="eventMeta">${fmtDay2(e.start)} → ${fmtDay2(e.end)}</div>
         <div class="eventSummary">${e.summary}</div>
         <div style="margin-top:6px;">
           ${e.youtube ? `<button class="eventLinkBtn" data-youtube="${e.youtube}">▶️ Regarder</button>` : ""}
@@ -188,7 +408,7 @@ function renderList(events) {
     .join("");
 }
 
-// ---- Create map (satellite)
+// ---- Map (satellite)
 const map = new maplibregl.Map({
   container: "map",
   style: {
@@ -212,7 +432,6 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl(), "top-right");
 
 map.on("load", () => {
-  // Globe si dispo
   try {
     map.setProjection({ type: "globe" });
   } catch (e) {}
@@ -235,26 +454,32 @@ map.on("load", () => {
     },
   });
 
-  // Popup au clic
   map.on("click", "events-points", (e) => {
     const f = e.features[0];
     const p = f.properties;
+
+    // Affichage propre des dates (BC supporté)
+    const dateTxt = `${fmtDay2(p.start)} → ${fmtDay2(p.end)}`;
 
     new maplibregl.Popup()
       .setLngLat(f.geometry.coordinates)
       .setHTML(`
         <div style="color:#0b0f14; font-family:system-ui; min-width: 220px;">
           <div style="font-weight:800; margin-bottom:6px;">${p.title}</div>
-          <div style="opacity:.8; margin-bottom:8px;">${p.start} → ${p.end}</div>
+          <div style="opacity:.8; margin-bottom:8px;">${dateTxt}</div>
           <div style="margin-bottom:10px;">${p.summary}</div>
-          ${p.youtube ? `<button class="watchBtn" data-youtube="${p.youtube}" style="
+          ${
+            p.youtube
+              ? `<button class="watchBtn" data-youtube="${p.youtube}" style="
             background:#0b0f14;
             color:#e8eef7;
             border:1px solid rgba(0,0,0,.25);
             border-radius:10px;
             padding:6px 10px;
             cursor:pointer;
-          ">▶️ Regarder</button>` : ""}
+          ">▶️ Regarder</button>`
+              : ""
+          }
         </div>
       `)
       .addTo(map);
@@ -272,7 +497,14 @@ function initTimeline() {
   range.max = String(timeline.length - 1);
   range.value = String(timeline.length - 1);
 
-  range.addEventListener("input", updateForSlider);
+  range.addEventListener("input", () => {
+    // bouger le slider = revenir à un mode normal
+    if (searchMode?.type === "range") {
+      searchMode = null;
+    }
+    updateForSlider();
+  });
+
   updateForSlider();
 }
 
@@ -280,11 +512,147 @@ function updateForSlider() {
   const idx = parseInt(range.value, 10);
   const year = timeline[idx];
 
-  selectedDate.textContent = String(year);
+  // En mode période, c’est la recherche qui affiche
+  if (searchMode?.type === "range") return;
 
-  const filtered = filterEventsForYear(year);
+  // ✅ Affichage BC-friendly dans la pill "Chronologie"
+  selectedDate.textContent = displayYear(year);
+
+  let filtered = filterEventsForYear(year);
+
+  if (searchMode?.type === "text") {
+    filtered = filterEventsByText(filtered, searchMode.text);
+  }
+
   renderList(filtered);
 
   const src = map.getSource("events");
   if (src) src.setData(toGeoJSON(filtered));
 }
+
+// =========================
+// AUTOCOMPLETE (Google-like)
+// =========================
+let currentSuggestions = [];
+let activeIndex = -1;
+
+function showSuggestions(items) {
+  currentSuggestions = items;
+  activeIndex = -1;
+
+  if (!items.length) {
+    suggestionsEl.classList.add("hidden");
+    suggestionsEl.innerHTML = "";
+    return;
+  }
+
+  suggestionsEl.innerHTML = items
+    .map(
+      (it, idx) => `
+      <div class="suggestionItem" data-idx="${idx}">
+        <div class="suggestionLabel">${it.label}</div>
+        <div class="suggestionMeta">${it.start}–${it.end}</div>
+      </div>
+    `
+    )
+    .join("");
+
+  suggestionsEl.classList.remove("hidden");
+}
+
+function hideSuggestions() {
+  suggestionsEl.classList.add("hidden");
+  suggestionsEl.innerHTML = "";
+  currentSuggestions = [];
+  activeIndex = -1;
+}
+
+function setActiveSuggestion(newIdx) {
+  const nodes = suggestionsEl.querySelectorAll(".suggestionItem");
+  if (!nodes.length) return;
+
+  nodes.forEach((n) => n.classList.remove("active"));
+
+  activeIndex = newIdx;
+  if (activeIndex >= 0 && activeIndex < nodes.length) {
+    nodes[activeIndex].classList.add("active");
+    nodes[activeIndex].scrollIntoView({ block: "nearest" });
+  }
+}
+
+function applySuggestion(item) {
+  searchInput.value = item.label;
+  hideSuggestions();
+
+  searchMode = { type: "range", start: item.start, end: item.end, text: normalizeQuery(item.label) };
+  setSliderToYear(item.start);
+
+  const eventsRange = filterEventsForYearRange(item.start, item.end);
+  renderList(eventsRange);
+
+  const src = map.getSource("events");
+  if (src) src.setData(toGeoJSON(eventsRange));
+
+  selectedDate.textContent = `${item.start}–${item.end}`;
+}
+
+suggestionsEl.addEventListener("click", (e) => {
+  const item = e.target.closest(".suggestionItem");
+  if (!item) return;
+  const idx = parseInt(item.dataset.idx, 10);
+  const picked = currentSuggestions[idx];
+  if (picked) applySuggestion(picked);
+});
+
+searchInput.addEventListener("input", () => {
+  const q = normalizeQuery(searchInput.value);
+
+  if (!q || q.length < 2) {
+    hideSuggestions();
+    return;
+  }
+
+  const matched = PERIOD_SUGGESTIONS.filter((s) => {
+    const labelNorm = normalizeQuery(s.label);
+    if (labelNorm.includes(q)) return true;
+
+    return (s.keywords || []).some((k) => {
+      const kn = normalizeQuery(k);
+      return kn.includes(q) || q.includes(kn);
+    });
+  });
+
+  showSuggestions(matched.slice(0, 6));
+});
+
+searchInput.addEventListener("keydown", (e) => {
+  // Enter sans suggestion active -> lance recherche normale
+  if (e.key === "Enter" && suggestionsEl.classList.contains("hidden")) {
+    applySearch();
+    return;
+  }
+
+  if (suggestionsEl.classList.contains("hidden")) return;
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    setActiveSuggestion(Math.min(activeIndex + 1, currentSuggestions.length - 1));
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    setActiveSuggestion(Math.max(activeIndex - 1, 0));
+  } else if (e.key === "Enter") {
+    if (activeIndex >= 0 && currentSuggestions[activeIndex]) {
+      e.preventDefault();
+      applySuggestion(currentSuggestions[activeIndex]);
+    } else {
+      applySearch();
+    }
+  } else if (e.key === "Escape") {
+    hideSuggestions();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".searchWrap")) return;
+  hideSuggestions();
+});

@@ -18,11 +18,27 @@
       <!-- Barre chronologie en bas de la carte -->
       <div id="timelineBar">
         <div class="timelineHeader">
-          <div>
+          <div class="leftHeader">
             <strong>Chronologie</strong>
             <span class="dateBox" id="selectedDate">—</span>
           </div>
-          <span class="hint">Déplace le slider : on affiche les événements actifs à cette année.</span>
+          <span class="hint">Déplace le slider (année) ou recherche une période.</span>
+        </div>
+
+        <!-- Recherche + suggestions -->
+        <div class="searchWrap">
+          <div class="searchRow">
+            <input
+              id="searchInput"
+              type="text"
+              placeholder="Rechercher (ex: seconde guerre mondiale, normandie, berlin)..."
+              autocomplete="off"
+            />
+            <button id="searchBtn" class="searchBtn">Rechercher</button>
+            <button id="clearBtn" class="searchBtn secondary">Effacer</button>
+          </div>
+
+          <div id="suggestions" class="suggestions hidden" aria-label="Suggestions"></div>
         </div>
 
         <input id="range" type="range" min="0" max="0" step="1" value="0" />

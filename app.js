@@ -40,6 +40,7 @@ function fmtDay2(iso) {
 }
 
 // ---- UI elements
+const randomBtn = document.getElementById("randomBtn");
 const range = document.getElementById("range");
 const selectedDate = document.getElementById("selectedDate");
 const eventsList = document.getElementById("eventsList");
@@ -322,6 +323,74 @@ let searchMode = null;
 // {type:"range", start, end} = période
 // {type:"text", text} = texte
 
+function showRandomEvent() {
+  if (!EVENTS || EVENTS.length === 0) return;
+
+  // 1) Choisir un événement au hasard
+  const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+
+  // 2) Trouver une année valide
+  const year = ev.startYear ?? ev.endYear;
+  if (year == null) return;
+
+  // 3) Désactiver les filtres/recherches
+  searchMode = null;
+  hideSuggestions();
+
+  // 4) Positionner le slider sur l’année de l’event
+  setSliderToYear(year);
+
+  // 5) N’afficher que cet événement
+  renderList([ev]);
+  const src = map.getSource("events");
+  if (src) src.setData(toGeoJSON([ev]));
+
+  // 6) Mettre à jour l’affichage de la date
+  selectedDate.textContent = displayYear(year);
+
+  // 7) Centrer la carte sur l’événement
+  if (typeof ev.lng === "number" && typeof ev.lat === "number") {
+    map.flyTo({
+      center: [ev.lng, ev.lat],
+      zoom: 5,
+      speed: 0.8,
+      curve: 1.4,
+    });
+  }
+
+  // 8) OUVRIR AUTOMATIQUEMENT LA POPUP (page de l’événement)
+  setTimeout(() => {
+    const popupHtml = `
+      <div style="color:#0b0f14; font-family:system-ui; min-width: 220px;">
+        <div style="font-weight:800; margin-bottom:6px;">${ev.title}</div>
+        <div style="opacity:.8; margin-bottom:8px;">
+          ${fmtDay2(ev.start)} → ${fmtDay2(ev.end)}
+        </div>
+        <div style="margin-bottom:10px;">${ev.summary}</div>
+        ${
+          ev.youtube
+            ? `<button class="watchBtn" data-youtube="${ev.youtube}" style="
+              background:#0b0f14;
+              color:#e8eef7;
+              border:1px solid rgba(0,0,0,.25);
+              border-radius:10px;
+              padding:6px 10px;
+              cursor:pointer;
+            ">▶️ Regarder</button>`
+            : ""
+        }
+      </div>
+    `;
+
+    new maplibregl.Popup()
+      .setLngLat([ev.lng, ev.lat])
+      .setHTML(popupHtml)
+      .addTo(map);
+  }, 600); // petit délai pour laisser le temps à la carte de se recentrer
+}
+
+
+
 function applySearch() {
   const qNorm = normalizeQuery(searchInput.value);
 
@@ -457,33 +526,49 @@ map.on("load", () => {
   map.on("click", "events-points", (e) => {
     const f = e.features[0];
     const p = f.properties;
+    const coords = f.geometry.coordinates; // [lng, lat]
 
-    // Affichage propre des dates (BC supporté)
-    const dateTxt = `${fmtDay2(p.start)} → ${fmtDay2(p.end)}`;
+    // 1️⃣ Zoom + déplacement fluide vers le point
+    map.flyTo({
+      center: coords,
+      zoom: Math.max(map.getZoom(), 5), // au moins zoom 5
+      speed: 0.8,
+      curve: 1.4,
+      essential: true,
+    });
 
-    new maplibregl.Popup()
-      .setLngLat(f.geometry.coordinates)
-      .setHTML(`
-        <div style="color:#0b0f14; font-family:system-ui; min-width: 220px;">
-          <div style="font-weight:800; margin-bottom:6px;">${p.title}</div>
-          <div style="opacity:.8; margin-bottom:8px;">${dateTxt}</div>
-          <div style="margin-bottom:10px;">${p.summary}</div>
-          ${
-            p.youtube
-              ? `<button class="watchBtn" data-youtube="${p.youtube}" style="
-            background:#0b0f14;
-            color:#e8eef7;
-            border:1px solid rgba(0,0,0,.25);
-            border-radius:10px;
-            padding:6px 10px;
-            cursor:pointer;
-          ">▶️ Regarder</button>`
-              : ""
-          }
-        </div>
-      `)
-      .addTo(map);
+    // 2️⃣ Fermer les popups existantes (optionnel mais propre)
+    document.querySelectorAll(".maplibregl-popup").forEach((el) => el.remove());
+
+    // 3️⃣ Ouvrir la popup après un petit délai (effet plus fluide)
+    setTimeout(() => {
+      const dateTxt = `${fmtDay2(p.start)} → ${fmtDay2(p.end)}`;
+
+      new maplibregl.Popup()
+        .setLngLat(coords)
+        .setHTML(`
+          <div style="color:#0b0f14; font-family:system-ui; min-width: 220px;">
+            <div style="font-weight:800; margin-bottom:6px;">${p.title}</div>
+            <div style="opacity:.8; margin-bottom:8px;">${dateTxt}</div>
+            <div style="margin-bottom:10px;">${p.summary}</div>
+            ${
+              p.youtube
+                ? `<button class="watchBtn" data-youtube="${p.youtube}" style="
+                  background:#0b0f14;
+                  color:#e8eef7;
+                  border:1px solid rgba(0,0,0,.25);
+                  border-radius:10px;
+                  padding:6px 10px;
+                  cursor:pointer;
+                ">▶️ Regarder</button>`
+                : ""
+            }
+          </div>
+        `)
+        .addTo(map);
+    }, 450); // petit délai pour laisser le temps au zoom
   });
+
 
   map.on("mouseenter", "events-points", () => (map.getCanvas().style.cursor = "pointer"));
   map.on("mouseleave", "events-points", () => (map.getCanvas().style.cursor = ""));
@@ -656,3 +741,8 @@ document.addEventListener("click", (e) => {
   if (e.target.closest(".searchWrap")) return;
   hideSuggestions();
 });
+
+randomBtn.addEventListener("click", () => {
+  showRandomEvent();
+});
+

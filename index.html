@@ -11,21 +11,20 @@
 
 <body>
   <div id="app">
-    <!-- Carte -->
     <div id="mapContainer">
       <div id="map"></div>
 
-      <!-- Barre chronologie en bas de la carte -->
+      <!-- Barre chronologie en bas -->
       <div id="timelineBar">
         <div class="timelineHeader">
           <div class="leftHeader">
             <strong>Chronologie</strong>
             <span class="dateBox" id="selectedDate">—</span>
           </div>
-          <span class="hint">Déplace le slider (année) ou recherche une période.</span>
+          <span class="hint">Clique un bloc (100 ans) puis une année.</span>
         </div>
 
-        <!-- Recherche + suggestions -->
+        <!-- Recherche -->
         <div class="searchWrap">
           <div class="searchRow">
             <input
@@ -36,17 +35,27 @@
             />
             <button id="searchBtn" class="searchBtn">Rechercher</button>
             <button id="clearBtn" class="searchBtn secondary">Effacer</button>
-            <button id="randomBtn" class="searchBtn">🎲 Aléatoire</button>
+            <button id="randomBtn" class="searchBtn tertiary">🎲 Aléatoire</button>
           </div>
 
           <div id="suggestions" class="suggestions hidden" aria-label="Suggestions"></div>
         </div>
 
-        <input id="range" type="range" min="0" max="0" step="1" value="0" />
+        <!-- Blocs 100 ans -->
+        <div class="centuryRow">
+          <div class="centuryLabel">Périodes (100 ans)</div>
+          <div id="centuryBar" class="centuryBar" aria-label="Blocs de 100 ans"></div>
+        </div>
+
+        <!-- Frise à points (année dans le bloc sélectionné) -->
+        <div class="yearsRow">
+          <div class="yearsLabel">Années (dans le bloc)</div>
+          <div id="timelineTrack" class="timelineTrack" aria-label="Frise des années"></div>
+        </div>
       </div>
     </div>
 
-    <!-- Panneau événements repliable -->
+    <!-- Panneau événements -->
     <div id="eventsPanel" class="collapsed">
       <button id="togglePanel" aria-label="Afficher/Masquer les événements">⬆</button>
       <div id="eventsList"></div>

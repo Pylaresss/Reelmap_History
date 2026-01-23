@@ -1,5 +1,22 @@
 // app.js — Supabase + carte + blocs 100 ans + frise années (points) + recherche + random + popup vidéo
 
+
+const HOME_VIEW = {
+  center: [0, 20],
+  zoom: 1.2,
+  bearing: 0,
+  pitch: 0,
+};
+
+function resetMapView() {
+  map.flyTo({
+    ...HOME_VIEW,
+    speed: 0.9,
+    curve: 1.4,
+    essential: true,
+  });
+}
+
 // =====================
 // Dates (BC-safe)
 // =====================
@@ -72,6 +89,18 @@ togglePanel?.addEventListener("click", () => {
   eventsPanel.classList.toggle("expanded", isCollapsed);
   togglePanel.textContent = isCollapsed ? "⬇" : "⬆";
 });
+
+const PERIOD_BLOCKS = [
+  { id: "antiq",  label: "-400 à -1",      start: -400, end: -1 },
+  { id: "p1",     label: "0 à 999",        start: 0,    end: 999 },
+  { id: "p2",     label: "1000 à 1699",    start: 1000, end: 1699 },
+  { id: "p3",     label: "1700 à 1799",    start: 1700, end: 1799 },
+  { id: "p4",     label: "1800 à 1899",    start: 1800, end: 1899 },
+  { id: "p5",     label: "1900 à 1949",    start: 1900, end: 1949 },
+  { id: "p6",     label: "1950 à 1999",    start: 1950, end: 1999 },
+  { id: "p7",     label: "2000 à aujourd’hui", start: 2000, end: null }, // null = jusqu'à aujourd'hui
+];
+
 
 // =====================
 // YouTube modal
@@ -281,56 +310,41 @@ function renderList(events) {
 // =====================
 // 100-year blocks
 // =====================
-function centuryStart(year) {
-  // floor marche bien aussi pour négatifs (-331 -> -400)
-  return Math.floor(year / 100) * 100;
-}
 
-function blockLabel(start) {
-  const end = start + 99;
 
-  // BC uniquement
-  if (start < 0 && end < 0) {
-    return `${Math.abs(start)}–${Math.abs(end)} av. J.-C.`;
-  }
+function resolveBlockEnd(block) {
+  // end=null => jusqu'à aujourd'hui (maxYear des events)
+  if (block.end != null) return block.end;
 
-  // AD uniquement
-  if (start >= 0 && end >= 0) {
-    return `${start}–${end}`;
-  }
-
-  // Si jamais ça traverse (rare), on affiche brut
-  return `${start}–${end}`;
-}
-
-function computeCenturyBlocks(events) {
-  const years = events
+  const yearsAll = EVENTS
     .flatMap((e) => [e.startYear, e.endYear])
     .filter((y) => typeof y === "number" && !Number.isNaN(y));
 
-  if (!years.length) return [];
-
-  const minY = Math.min(...years);
-  const maxY = Math.max(...years);
-
-  const startC = centuryStart(minY);
-  const endC = centuryStart(maxY);
-
-  const blocks = [];
-  for (let c = startC; c <= endC; c += 100) {
-    blocks.push({ start: c, end: c + 99, label: blockLabel(c) });
-  }
-  return blocks;
+  if (!yearsAll.length) return 2026; // fallback
+  return Math.max(...yearsAll);
 }
+
+function findBlockForYear(year) {
+  for (const b of PERIOD_BLOCKS) {
+    const end = resolveBlockEnd(b);
+    if (year >= b.start && year <= end) return b;
+  }
+  return null;
+}
+
 
 // =====================
 // Years inside selected block
 // =====================
-function computeYearsInBlock(blockStart, blockEnd) {
-  // On prend toutes les années qui sont "couvertes" par au moins un event dans ce bloc
-  const eventsInRange = filterEventsForYearRange(blockStart, blockEnd);
+function computeYearsInActiveBlock() {
+  if (!ACTIVE_BLOCK) return [];
 
+  const blockStart = ACTIVE_BLOCK.start;
+  const blockEnd = ACTIVE_BLOCK.end;
+
+  const eventsInRange = filterEventsForYearRange(blockStart, blockEnd);
   const set = new Set();
+
   for (const e of eventsInRange) {
     const s = Math.max(blockStart, e.startYear);
     const en = Math.min(blockEnd, e.endYear ?? e.startYear);
@@ -340,24 +354,36 @@ function computeYearsInBlock(blockStart, blockEnd) {
   return Array.from(set).sort((a, b) => a - b);
 }
 
+
 // =====================
 // Timeline rendering
 // =====================
 let ACTIVE_BLOCK = null;  // {start,end}
 let ACTIVE_YEAR = null;
 
-function selectBlock(blockStart) {
-  ACTIVE_BLOCK = { start: blockStart, end: blockStart + 99 };
+
+function selectBlock(block) {
+  closeOpenPopup();
+  resetMapView();
+
+  if (!block) return;
+
+  const end = resolveBlockEnd(block);
+  ACTIVE_BLOCK = { ...block, end };
 
   // UI active
   document.querySelectorAll(".centuryBlock").forEach((b) => {
-    b.classList.toggle("active", parseInt(b.dataset.start, 10) === blockStart);
+    b.classList.toggle("active", b.dataset.id === block.id);
   });
 
   renderYearDotsForActiveBlock();
 }
 
+
 function selectYear(year) {
+  closeOpenPopup();
+  resetMapView();
+  
   ACTIVE_YEAR = year;
   selectedDate.textContent = displayYear(year);
 
@@ -386,7 +412,8 @@ function renderYearDotsForActiveBlock() {
   timelineTrack.innerHTML = `<div class="timelineLine"></div>`;
 
   const { start, end } = ACTIVE_BLOCK;
-  const years = computeYearsInBlock(start, end);
+  const years = computeYearsInActiveBlock();
+
 
   if (!years.length) {
     // si pas d’événement dans ce bloc
@@ -395,7 +422,9 @@ function renderYearDotsForActiveBlock() {
   }
 
   for (const y of years) {
-    const t = (y - start) / 99; // 0..1
+    const span = Math.max(1, (end - start));
+    const t = (y - start) / span;
+
     const dot = document.createElement("div");
     dot.className = "timelineDot";
     dot.dataset.year = String(y);
@@ -482,7 +511,7 @@ function applySearch() {
     selectedDate.textContent = `${preset.start}–${preset.end}`;
 
     // on se place sur le bloc du start
-    selectBlock(centuryStart(preset.start));
+    selectBlock(findBlockForYear(preset.start));
     return;
   }
 
@@ -563,7 +592,7 @@ function applySuggestion(item) {
   if (src) src.setData(toGeoJSON(eventsRange));
 
   selectedDate.textContent = `${item.start}–${item.end}`;
-  selectBlock(centuryStart(item.start));
+  selectBlock(findBlockForYear(item.start));
 }
 
 suggestionsEl?.addEventListener("click", (e) => {
@@ -638,7 +667,7 @@ function showRandomEvent() {
   hideSuggestions();
 
   // select block + render dots
-  selectBlock(centuryStart(year));
+  selectBlock(findBlockForYear(year));
 
   // select year
   selectYear(year);
@@ -672,12 +701,21 @@ function showRandomEvent() {
       </div>
     `;
 
-    document.querySelectorAll(".maplibregl-popup").forEach((el) => el.remove());
     new maplibregl.Popup().setLngLat([ev.lng, ev.lat]).setHTML(popupHtml).addTo(map);
   }, 600);
 }
 
 randomBtn?.addEventListener("click", showRandomEvent);
+
+let OPEN_POPUP = null;
+
+function closeOpenPopup() {
+  if (OPEN_POPUP) {
+    OPEN_POPUP.remove();
+    OPEN_POPUP = null;
+  }
+}
+
 
 // =====================
 // Init map + layers + clicks
@@ -703,54 +741,61 @@ map.on("load", () => {
     },
   });
 
-  // click point sur carte => zoom + popup + select bloc + année
-  map.on("click", "events-points", (e) => {
-    const f = e.features[0];
-    const p = f.properties;
-    const coords = f.geometry.coordinates;
+// click point sur carte => zoom + popup + select bloc + année
+map.on("click", "events-points", (e) => {
+  const f = e.features?.[0];
+  if (!f) return;
 
-    // zoom
-    map.flyTo({
-      center: coords,
-      zoom: Math.max(map.getZoom(), 5),
-      speed: 0.8,
-      curve: 1.4,
-      essential: true,
-    });
+  const p = f.properties || {};
+  const coords = f.geometry?.coordinates;
+  if (!coords) return;
 
-    // select bloc+année depuis start
-    const y = yearFromSupabaseDate(p.start);
-    if (typeof y === "number") {
-      selectBlock(centuryStart(y));
-      selectYear(y);
-    }
+  // ✅ ferme l'ancien popup
+  closeOpenPopup();
 
-    // popup
-    document.querySelectorAll(".maplibregl-popup").forEach((el) => el.remove());
+  // select bloc+année depuis start
+  const y = yearFromSupabaseDate(p.start);
+  if (typeof y === "number") {
+    selectBlock(findBlockForYear(y));
+    selectYear(y);
+  }
 
-    setTimeout(() => {
-      const dateTxt = `${fmtDay2(p.start)} → ${fmtDay2(p.end)}`;
-
-      new maplibregl.Popup()
-        .setLngLat(coords)
-        .setHTML(`
-          <div style="color:#0b0f14; font-family:system-ui; min-width: 220px;">
-            <div style="font-weight:800; margin-bottom:6px;">${p.title}</div>
-            <div style="opacity:.8; margin-bottom:8px;">${dateTxt}</div>
-            <div style="margin-bottom:10px;">${p.summary}</div>
-            ${
-              p.youtube
-                ? `<button class="watchBtn" data-youtube="${p.youtube}" style="
-                  background:#0b0f14;color:#e8eef7;border:1px solid rgba(0,0,0,.25);
-                  border-radius:10px;padding:6px 10px;cursor:pointer;
-                ">▶️ Regarder</button>`
-                : ""
-            }
-          </div>
-        `)
-        .addTo(map);
-    }, 450);
+  // zoom
+  map.flyTo({
+    center: coords,
+    zoom: Math.max(map.getZoom(), 5),
+    speed: 0.8,
+    curve: 1.4,
+    essential: true,
   });
+
+  // ✅ ouvrir la popup quand le mouvement est fini (plus fiable que setTimeout)
+  map.once("moveend", () => {
+    closeOpenPopup(); // au cas où tu recliques très vite
+
+    const dateTxt = `${fmtDay2(p.start)} → ${fmtDay2(p.end)}`;
+
+    OPEN_POPUP = new maplibregl.Popup()
+      .setLngLat(coords)
+      .setHTML(`
+        <div style="color:#0b0f14; font-family:system-ui; min-width: 220px;">
+          <div style="font-weight:800; margin-bottom:6px;">${p.title ?? ""}</div>
+          <div style="opacity:.8; margin-bottom:8px;">${dateTxt}</div>
+          <div style="margin-bottom:10px;">${p.summary ?? ""}</div>
+          ${
+            p.youtube
+              ? `<button class="watchBtn" data-youtube="${p.youtube}" style="
+                background:#0b0f14;color:#e8eef7;border:1px solid rgba(0,0,0,.25);
+                border-radius:10px;padding:6px 10px;cursor:pointer;
+              ">▶️ Regarder</button>`
+              : ""
+          }
+        </div>
+      `)
+      .addTo(map);
+  });
+});
+
 
   map.on("mouseenter", "events-points", () => (map.getCanvas().style.cursor = "pointer"));
   map.on("mouseleave", "events-points", () => (map.getCanvas().style.cursor = ""));
@@ -758,31 +803,29 @@ map.on("load", () => {
   // =====================
   // INIT UI blocs 100 ans
   // =====================
-  const blocks = computeCenturyBlocks(EVENTS);
-
-  if (!blocks.length) {
-    selectedDate.textContent = "—";
-    return;
-  }
 
   centuryBar.innerHTML = "";
-  for (const b of blocks) {
+
+  for (const b of PERIOD_BLOCKS) {
     const el = document.createElement("div");
     el.className = "centuryBlock";
-    el.dataset.start = String(b.start);
+    el.dataset.id = b.id;
     el.textContent = b.label;
 
     el.addEventListener("click", () => {
-      // si on est en mode range => on revient au normal
       if (searchMode?.type === "range") searchMode = null;
-      selectBlock(b.start);
+      selectBlock(b);
     });
 
     centuryBar.appendChild(el);
   }
 
-  // Bloc par défaut = celui du max year (le plus récent)
-  const yearsAll = EVENTS.flatMap((e) => [e.startYear, e.endYear]).filter((y) => typeof y === "number");
-  const maxYear = Math.max(...yearsAll);
-  selectBlock(centuryStart(maxYear));
+  // bloc par défaut = celui qui contient l'année max
+  const yearsAll = EVENTS
+    .flatMap((e) => [e.startYear, e.endYear])
+    .filter((y) => typeof y === "number" && !Number.isNaN(y));
+
+  const maxYear = yearsAll.length ? Math.max(...yearsAll) : 2026;
+  selectBlock(findBlockForYear(maxYear) || PERIOD_BLOCKS[PERIOD_BLOCKS.length - 1]);
+
 });

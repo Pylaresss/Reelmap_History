@@ -186,7 +186,7 @@ html, body {
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,.12);
   background: rgba(255,255,255,.03);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .timelineLine{
@@ -331,4 +331,28 @@ html, body {
 }
 .maplibregl-ctrl-attrib:hover {
   opacity: 1;
+}
+
+
+.timelineTip{
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  background: rgba(10, 14, 20, 0.96);
+  border: 1px solid rgba(255,255,255,.18);
+  color: #e8eef7;
+  padding: 6px 9px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+  z-index: 50;
+}
+
+.timelineDot:hover .timelineTip{
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
 }

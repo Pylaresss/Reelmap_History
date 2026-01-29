@@ -13,6 +13,40 @@
   <div id="app">
     <div id="mapContainer">
       <div id="map"></div>
+<!-- Toolbar repliable en haut -->
+        <div id="topToolbar" class="toolbar collapsed">
+          <button id="toolbarToggle" class="toolbarToggle" aria-label="Afficher/Masquer les contrôles">
+            ⌄
+          </button>
+
+          <div class="toolbarContent">
+            <div class="searchRow">
+              <input
+                id="searchInput"
+                type="text"
+                placeholder="Rechercher (ex: seconde guerre mondiale, normandie, berlin)..."
+                autocomplete="off"
+              />
+              <button id="searchBtn" class="searchBtn">Rechercher</button>
+              <button id="clearBtn" class="searchBtn secondary">Effacer</button>
+
+              <!-- Bouton aléatoire -->
+              <button id="randomBtn" class="searchBtn">🎲 Aléatoire</button>
+
+              <!-- Bouton formulaire (solution 1) -->
+              <button
+                id="submitEventBtn"
+                class="searchBtn"
+                onclick="window.open('https://docs.google.com/forms/d/e/1FAIpQLSf-HW1dRzJkLXmoW3sVw5PCSqozTR-g9VO_lFglhhhJ6DzmKQ/viewform?usp=dialog', '_blank')"
+              >
+                ➕ Proposer
+              </button>
+            </div>
+
+            <div id="suggestions" class="suggestions hidden" aria-label="Suggestions"></div>
+          </div>
+        </div>
+
 
       <!-- Barre chronologie en bas -->
       <div id="timelineBar">
@@ -21,25 +55,8 @@
             <strong>Chronologie</strong>
             <span class="dateBox" id="selectedDate">—</span>
           </div>
-          <span class="hint">Clique un bloc (100 ans) puis une année.</span>
         </div>
 
-        <!-- Recherche -->
-        <div class="searchWrap">
-          <div class="searchRow">
-            <input
-              id="searchInput"
-              type="text"
-              placeholder="Rechercher (ex: seconde guerre mondiale, normandie, berlin)..."
-              autocomplete="off"
-            />
-            <button id="searchBtn" class="searchBtn">Rechercher</button>
-            <button id="clearBtn" class="searchBtn secondary">Effacer</button>
-            <button id="randomBtn" class="searchBtn tertiary">🎲 Aléatoire</button>
-          </div>
-
-          <div id="suggestions" class="suggestions hidden" aria-label="Suggestions"></div>
-        </div>
 
         <!-- Blocs 100 ans -->
         <div class="centuryRow">
@@ -57,7 +74,6 @@
 
     <!-- Panneau événements -->
     <div id="eventsPanel" class="collapsed">
-      <button id="togglePanel" aria-label="Afficher/Masquer les événements">⬆</button>
       <div id="eventsList"></div>
     </div>
   </div>

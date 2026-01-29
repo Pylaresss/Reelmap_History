@@ -68,6 +68,17 @@ const searchBtn = document.getElementById("searchBtn");
 const clearBtn = document.getElementById("clearBtn");
 const suggestionsEl = document.getElementById("suggestions");
 
+const topToolbar = document.getElementById("topToolbar");
+const toolbarToggle = document.getElementById("toolbarToggle");
+
+toolbarToggle?.addEventListener("click", () => {
+  const isOpen = topToolbar.classList.contains("expanded");
+  topToolbar.classList.toggle("expanded", !isOpen);
+  topToolbar.classList.toggle("collapsed", isOpen);
+  toolbarToggle.textContent = isOpen ? "⌄" : "⌃";
+});
+
+
 // Modal vidéo
 const videoModal = document.getElementById("videoModal");
 const videoFrame = document.getElementById("videoFrame");
@@ -657,53 +668,76 @@ document.addEventListener("click", (e) => {
 // Random
 // =====================
 function showRandomEvent() {
-  if (!EVENTS.length) return;
+  if (!EVENTS || EVENTS.length === 0) return;
+
+  // ✅ ferme la popup actuelle si elle existe
+  closeOpenPopup();
+
+  // 1) choisir un événement au hasard
   const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+  if (!ev) return;
+
+  // 2) année de référence
   const year = ev.startYear ?? ev.endYear;
   if (year == null) return;
 
-  // reset search
+  // 3) reset filtres/recherche
   searchMode = null;
-  hideSuggestions();
+  hideSuggestions?.();
 
-  // select block + render dots
+  // 4) sélection bloc + année
   selectBlock(findBlockForYear(year));
-
-  // select year
   selectYear(year);
 
-  // n'afficher que l'event (plus "wow")
+  // 5) n’afficher que cet événement (liste + map)
   renderList([ev]);
   const src = map.getSource("events");
   if (src) src.setData(toGeoJSON([ev]));
 
-  // zoom carte + popup
+  // 6) zoom sur l’événement
   if (typeof ev.lng === "number" && typeof ev.lat === "number") {
-    map.flyTo({ center: [ev.lng, ev.lat], zoom: 5, speed: 0.8, curve: 1.4 });
+    const coords = [ev.lng, ev.lat];
+
+    map.flyTo({
+      center: coords,
+      zoom: Math.max(map.getZoom(), 5),
+      speed: 0.8,
+      curve: 1.4,
+      essential: true,
+    });
+
+    // ✅ ouvre la popup quand le zoom est fini
+    map.once("moveend", () => {
+      closeOpenPopup(); // au cas où on a recliqué très vite
+
+      const dateTxt = `${fmtDay2(ev.start)} → ${fmtDay2(ev.end)}`;
+
+      OPEN_POPUP = new maplibregl.Popup()
+        .setLngLat(coords)
+        .setHTML(`
+          <div style="color:#0b0f14; font-family:system-ui; min-width: 220px;">
+            <div style="font-weight:800; margin-bottom:6px;">${ev.title}</div>
+            <div style="opacity:.8; margin-bottom:8px;">${dateTxt}</div>
+            <div style="margin-bottom:10px;">${ev.summary || ""}</div>
+            ${
+              ev.youtube
+                ? `<button class="watchBtn" data-youtube="${ev.youtube}" style="
+                  background:#0b0f14;
+                  color:#e8eef7;
+                  border:1px solid rgba(0,0,0,.25);
+                  border-radius:10px;
+                  padding:6px 10px;
+                  cursor:pointer;
+                ">▶️ Regarder</button>`
+                : ""
+            }
+          </div>
+        `)
+        .addTo(map);
+    });
   }
-
-  setTimeout(() => {
-    const popupHtml = `
-      <div style="color:#0b0f14; font-family:system-ui; min-width: 220px;">
-        <div style="font-weight:800; margin-bottom:6px;">${ev.title}</div>
-        <div style="opacity:.8; margin-bottom:8px;">
-          ${fmtDay2(ev.start)} → ${fmtDay2(ev.end)}
-        </div>
-        <div style="margin-bottom:10px;">${ev.summary}</div>
-        ${
-          ev.youtube
-            ? `<button class="watchBtn" data-youtube="${ev.youtube}" style="
-              background:#0b0f14;color:#e8eef7;border:1px solid rgba(0,0,0,.25);
-              border-radius:10px;padding:6px 10px;cursor:pointer;
-            ">▶️ Regarder</button>`
-            : ""
-        }
-      </div>
-    `;
-
-    new maplibregl.Popup().setLngLat([ev.lng, ev.lat]).setHTML(popupHtml).addTo(map);
-  }, 600);
 }
+
 
 randomBtn?.addEventListener("click", showRandomEvent);
 
